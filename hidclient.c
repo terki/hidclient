@@ -868,11 +868,12 @@ int	parse_events ( fd_set * efds, int sockdesc )
 				if ( altascii == 1 && inevent->code == KEY_LEFTALT && inevent->value == 0 )
 				{
 
-					if ( altasciidigit == 2 /*&& altasciicode >= 48 && altasciicode <= 57 */ )
+					if ( altasciidigit == 3 /*&& altasciicode >= 48 && altasciicode <= 57 */ )
 					{
 						switch ( altasciicode )
 						{
-							case 48: u=98; break; // 0
+							// u set to numpad buttons
+							/*case 48: u=98; break; // 0
 							case 49: u=89; break; // 1
 							case 50: u=90; break; // 2
 							case 51: u=91; break; // 3
@@ -881,7 +882,18 @@ int	parse_events ( fd_set * efds, int sockdesc )
 							case 54: u=94; break; // 6
 							case 55: u=95; break; // 7
 							case 56: u=96; break; // 8
-							case 57: u=97; break; // 9
+							case 57: u=97; break; // 9*/
+							// u set to numbers buttons
+							case 48: u=39; break; // 0
+							case 49: u=30; break; // 1
+							case 50: u=31; break; // 2
+							case 51: u=32; break; // 3
+							case 52: u=33; break; // 4
+							case 53: u=34; break; // 5
+							case 54: u=35; break; // 6
+							case 55: u=36; break; // 7
+							case 56: u=37; break; // 8
+							case 57: u=38; break; // 9
 							default:
 								fprintf( stderr, "Unsupported alt sequence %d\n", altasciicode);
 								
