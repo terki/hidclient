@@ -858,6 +858,8 @@ int	parse_events ( fd_set * efds, int sockdesc )
 
 				if ( altascii == 1 && inevent->code == KEY_LEFTALT && inevent->value == 1 )
 				{
+					if ( debugevents & 0x1 )
+						fprintf ( stdout, "altascii mode ON\n" );
 					altasciion=1;
 					altasciicode=0;
 					altasciidigit=0;
@@ -865,7 +867,8 @@ int	parse_events ( fd_set * efds, int sockdesc )
 				}
 				if ( altascii == 1 && inevent->code == KEY_LEFTALT && inevent->value == 0 )
 				{
-					if ( altasciidigit == 2 && altasciicode >= 48 && altasciicode <= 57 )
+
+					if ( altasciidigit == 2 /*&& altasciicode >= 48 && altasciicode <= 57 */ )
 					{
 						switch ( altasciicode )
 						{
@@ -880,14 +883,29 @@ int	parse_events ( fd_set * efds, int sockdesc )
 							case 56: u=96; break; // 8
 							case 57: u=97; break; // 9
 							default:
-								fprintf(stderr,"Unsupported alt sequence %d\n",altasciicode);
+								fprintf( stderr, "Unsupported alt sequence %d\n", altasciicode);
 								
 						}
+						// keydown
 						char pressedvirtualkey[8]	 = { u, 0, 0, 0, 0, 0, 0, 0 };
 						memcpy ( evkeyb->key, pressedvirtualkey, 8 );
 						modifierkeys = 0;
+						j = send ( sockdesc, evkeyb,
+							sizeof(struct hidrep_keyb_t),
+							MSG_NOSIGNAL );
+						if ( 1 > j )
+						{
+							fprintf( stderr, "Got %d from send\n", j);
+							return	-1;
+						}
+						// keyup
+						pressedvirtualkey[0] = 0;
+						memcpy ( evkeyb->key, pressedvirtualkey, 8 );
+
 					}
 					altasciion=0;
+					if ( debugevents & 0x1 )
+						fprintf ( stdout, "altascii mode OFF\n" );
 				}
 				j = send ( sockdesc, evkeyb,
 					sizeof(struct hidrep_keyb_t),
@@ -1020,6 +1038,11 @@ int	parse_events ( fd_set * efds, int sockdesc )
 							case 1: altasciicode+=c*10; break;
 							case 2: altasciicode+=c; break;
 						}
+					
+						if ( debugevents & 0x1 )
+						{
+							fprintf( stdout, "Got ascii code sequence digit %d as %d, altasciicode is now %d\n", altasciidigit, c, altasciicode);
+						}	
 						altasciidigit++;
 					}
 					if (altasciion) break; // avoid sending this event since we have handled it
