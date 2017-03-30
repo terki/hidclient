@@ -51,6 +51,8 @@
  *		Ubuntu 12.04 LTS on amd64
  *		Added -e, -l, -x
  * 2012-07-28	Add support for FIFO operation (-f/filename)
+ *  
+ * 2017-03-30   Add support for -a|--altascii for decoding alt+ascii codes to 0-9 keys
  * 
  * Dependency:	Needs libbluetooth (from bluez)
  *
@@ -199,6 +201,10 @@ char		pressedkey[8]	 = { 0, 0, 0, 0,  0, 0, 0, 0 };
 char		connectionok	 = 0;
 uint32_t	sdphandle	 = 0;	// To be used to "unregister" on exit
 int		debugevents      = 0;	// bitmask for debugging event data
+int		altascii         = 0;	// decode ALT+xxx ascii sequence?
+int		altasciion       = 0;   // ALT is currently down?
+int		altasciicode     = 0;   // current ascii code
+int		altasciidigit    = 0;   // current ascii code decimal digit (0, 1 or 2) 
 
 //***************** Implementation
 /* 
@@ -769,6 +775,7 @@ int	parse_events ( fd_set * efds, int sockdesc )
 			break;
 		  case	EV_KEY:
 			u = 1; // Modifier keys
+
 			switch ( inevent->code )
 			{
 			  // *** Mouse button events
@@ -848,6 +855,40 @@ int	parse_events ( fd_set * efds, int sockdesc )
 					modifierkeys |= u;
 				}
 				evkeyb->modify = modifierkeys;
+
+				if ( altascii == 1 && inevent->code == KEY_LEFTALT && inevent->value == 1 )
+				{
+					altasciion=1;
+					altasciicode=0;
+					altasciidigit=0;
+					break;
+				}
+				if ( altascii == 1 && inevent->code == KEY_LEFTALT && inevent->value == 0 )
+				{
+					if ( altasciidigit == 2 && altasciicode >= 48 && altasciicode <= 57 )
+					{
+						switch ( altasciicode )
+						{
+							case 48: u=98; break; // 0
+							case 49: u=89; break; // 1
+							case 50: u=90; break; // 2
+							case 51: u=91; break; // 3
+							case 52: u=92; break; // 4
+							case 53: u=93; break; // 5
+							case 54: u=94; break; // 6
+							case 55: u=95; break; // 7
+							case 56: u=96; break; // 8
+							case 57: u=97; break; // 9
+							default:
+								fprintf(stderr,"Unsupported alt sequence %d\n",altasciicode);
+								
+						}
+						char pressedvirtualkey[8]	 = { u, 0, 0, 0, 0, 0, 0, 0 };
+						memcpy ( evkeyb->key, pressedvirtualkey, 8 );
+						modifierkeys = 0;
+					}
+					altasciion=0;
+				}
 				j = send ( sockdesc, evkeyb,
 					sizeof(struct hidrep_keyb_t),
 					MSG_NOSIGNAL );
@@ -954,6 +995,36 @@ int	parse_events ( fd_set * efds, int sockdesc )
 			  case	KEY_C:		++u;
 			  case	KEY_B:		++u;
 			  case	KEY_A:		u +=3;	// A =>  4
+				if ( altasciion == 1 )
+				{
+					if ( inevent->value == 1 )
+					{
+						int c=0;
+						switch ( inevent->code )
+						{
+						  case	KEY_KP0:	c=0; break;
+						  case	KEY_KP9:	c=9; break;
+						  case	KEY_KP8:	c=8; break;
+						  case	KEY_KP7:	c=7; break;
+						  case	KEY_KP6:	c=6; break;
+						  case	KEY_KP5:	c=5; break;
+						  case	KEY_KP4:	c=4; break;
+						  case	KEY_KP3:	c=3; break;
+						  case	KEY_KP2:	c=2; break;
+						  case	KEY_KP1:	c=1; break;
+						  default: altasciion=0; 
+						}
+						switch ( altasciidigit )
+						{
+							case 0: altasciicode+=c*100; break;
+							case 1: altasciicode+=c*10; break;
+							case 2: altasciicode+=c; break;
+						}
+						altasciidigit++;
+					}
+					if (altasciion) break; // avoid sending this event since we have handled it
+					// TODO: send delayed ALT key / set modifier to support ALT shortcuts even in this mode if we "broke out" of ALT-xxx ascii mode here?
+				}
 				evkeyb->btcode = 0xA1;
 				evkeyb->rep_id = REPORTID_KEYBD;
 				if ( inevent->value == 1 )
@@ -1108,6 +1179,11 @@ int	main ( int argc, char ** argv )
 		else if ( 0 == strncmp ( argv[i], "-f", 2 ) )
 		{
 			fifoname = argv[i] + 2;
+		}
+		else if ( ( 0 == strcmp ( argv[i], "-a" ) ) ||
+			  ( 0 == strcmp ( argv[i], "--altascii" ) ) )
+		{
+			altascii = 1;
 		}
 		else
 		{
@@ -1348,6 +1424,7 @@ void	showhelp ( void )
 "-h|-?		Show this information\n" \
 "-e<num>\t	Don't use all devices; only event device(s) <num>\n" \
 "-f<name>	Use fifo <name> instead of event input devices\n" \
+"-a|--altascii  Decode ALT+xxx ascii codes into simple keystrokes (0-9 only)\n" \
 "-l		List available input devices\n" \
 "-x		Disable device in X11 while hidclient is running\n" \
 "-s|--skipsdp	Skip SDP registration\n" \
